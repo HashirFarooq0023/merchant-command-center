@@ -1,0 +1,19 @@
+# Secrets (Never commit these!)
+.env
+.env.local
+*.env
+
+# Python Virtual Environments & Cache
+.venv/
+venv/
+__pycache__/
+*.pyc
+backend/.venv/
+backend/__pycache__/
+
+# React / Node (Frontend)
+node_modules/
+dist/
+build/
+frontend/node_modules/
+frontend/dist/
