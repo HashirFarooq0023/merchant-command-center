@@ -1,32 +1,81 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Download, Filter, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@clerk/clerk-react";
 
-type OrderStatus = "Pending" | "Confirmed" | "Shipped";
+type OrderStatus = "Pending" | "Confirmed" | "Shipped" | "Cancelled";
 
-const mockOrders = [
-  { id: "ORD-1042", customer: "Ahmed Khan", phone: "+92 300 1234567", address: "House 42, Block B, DHA Phase 5, Lahore", items: "Lawn Print 3-Piece × 2", total: "Rs. 9,000", status: "Pending" as OrderStatus },
-  { id: "ORD-1041", customer: "Fatima Noor", phone: "+92 321 9876543", address: "Flat 8, Al-Habib Towers, Clifton, Karachi", items: "Silk Kurta - Blue × 1", total: "Rs. 6,200", status: "Confirmed" as OrderStatus },
-  { id: "ORD-1040", customer: "Bilal Hussain", phone: "+92 333 4567890", address: "Street 7, Sector F-8, Islamabad", items: "Kids Shalwar Kameez × 3", total: "Rs. 8,400", status: "Shipped" as OrderStatus },
-  { id: "ORD-1039", customer: "Ayesha Malik", phone: "+92 312 6543210", address: "Mohalla Iqbal, GT Road, Rawalpindi", items: "Cotton Dupatta × 4", total: "Rs. 4,800", status: "Confirmed" as OrderStatus },
-  { id: "ORD-1038", customer: "Usman Tariq", phone: "+92 345 7890123", address: "Gulberg III, Main Boulevard, Lahore", items: "Bridal Lehnga Set × 1", total: "Rs. 45,000", status: "Pending" as OrderStatus },
-  { id: "ORD-1037", customer: "Sana Javed", phone: "+92 302 3456789", address: "Askari 11, Sector B, Lahore", items: "Pashmina Shawl × 1", total: "Rs. 8,900", status: "Shipped" as OrderStatus },
-];
+type OrderData = {
+  id: string;
+  original_id: number;
+  customer: string;
+  phone: string;
+  address: string;
+  items: string;
+  total: string;
+  status: OrderStatus;
+};
 
-const statusColors: Record<OrderStatus, string> = {
+const statusColors: Record<string, string> = {
   Pending: "bg-accent/20 text-accent",
   Confirmed: "bg-primary/20 text-primary",
   Shipped: "bg-chart-2/20 text-chart-2",
+  Cancelled: "bg-red-500/20 text-red-500",
 };
 
 const Orders = () => {
-  const [orders, setOrders] = useState(mockOrders);
+  const { getToken } = useAuth();
+  const [orders, setOrders] = useState<OrderData[]>([]);
   const [search, setSearch] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const updateStatus = (id: string, status: OrderStatus) => {
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      const token = await getToken();
+      const res = await fetch("http://localhost:8000/orders", {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateStatus = async (id: string, original_id: number, status: OrderStatus) => {
+    // Optimistic UI update
     setOrders(orders.map((o) => (o.id === id ? { ...o, status } : o)));
+
+    try {
+      const token = await getToken();
+      await fetch(`http://localhost:8000/orders/${original_id}/status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+    } catch (error) {
+      console.error("Failed to update order status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update order status. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const exportCSV = () => {
@@ -119,13 +168,14 @@ const Orders = () => {
                     <select
                       value={order.status}
                       onChange={(e) =>
-                        updateStatus(order.id, e.target.value as OrderStatus)
+                        updateStatus(order.id, order.original_id, e.target.value as OrderStatus)
                       }
-                      className={`text-xs font-medium px-3 py-1.5 rounded-full border-0 outline-none cursor-pointer ${statusColors[order.status]}`}
+                      className={`text-xs font-medium px-3 py-1.5 rounded-full border-0 outline-none cursor-pointer ${statusColors[order.status] || "bg-muted text-foreground"}`}
                     >
                       <option value="Pending">Pending</option>
                       <option value="Confirmed">Confirmed</option>
                       <option value="Shipped">Shipped</option>
+                      <option value="Cancelled">Cancelled</option>
                     </select>
                   </td>
                 </tr>

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Save, Webhook, Phone, Shield, MessageSquareText, Copy, Check } from "lucide-react";
+import { Save, Webhook, Phone, Shield, MessageSquareText, Copy, Check, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 
 const Settings = () => {
   const [copied, setCopied] = useState(false);
+  const [openAiKey, setOpenAiKey] = useState(localStorage.getItem("merchant_openai_key") || "");
   const [systemPrompt, setSystemPrompt] = useState(
     `You are a helpful shopping assistant for a Pakistani clothing store. Follow these rules:
 - Always greet the customer with "Assalam-o-Alaikum"
@@ -27,7 +28,8 @@ const Settings = () => {
   };
 
   const handleSave = () => {
-    toast({ title: "Settings Saved", description: "Your configuration has been updated" });
+    localStorage.setItem("merchant_openai_key", openAiKey);
+    toast({ title: "Settings Saved", description: "Your configuration and API key have been updated" });
   };
 
   return (
@@ -78,6 +80,34 @@ const Settings = () => {
               className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
+        </div>
+      </motion.div>
+
+      {/* API Configuration */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="glass-card rounded-xl p-6"
+      >
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
+          <Key className="h-4 w-4 text-primary" />
+          API Configuration
+        </h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Provide your own OpenAI API key. If left blank, you will be using the shared company trial (48 hours limited).
+        </p>
+        <div>
+          <label className="text-xs text-muted-foreground mb-1.5 block">
+            OpenAI API Key
+          </label>
+          <input
+            type="password"
+            value={openAiKey}
+            onChange={(e) => setOpenAiKey(e.target.value)}
+            placeholder="sk-proj-..."
+            className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
+          />
         </div>
       </motion.div>
 

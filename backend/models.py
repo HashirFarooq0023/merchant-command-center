@@ -10,6 +10,8 @@ class Merchant(Base):
     email = Column(String(255), nullable=True)
     store_name = Column(String(255), nullable=True)
     tokens_used = Column(Integer, default=0)
+    openai_api_key = Column(String(255), nullable=True)
+    trial_start_time = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     customers = relationship("Customer", back_populates="merchant")
@@ -63,10 +65,13 @@ class Product(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     merchant_id = Column(String(255), ForeignKey("merchants.merchant_id"), nullable=False, index=True)
-    product_id = Column(String(255), index=True, nullable=False) # Shopify Product ID
+    handle = Column(String(255), index=True, nullable=False)
     sku = Column(String(100), index=True, nullable=False)
-    price = Column(Float, nullable=False)
     title = Column(String(255), nullable=False)
-    vendor = Column(String(255))
+    price = Column(Float, nullable=False)
+    image_url = Column(String(1000), nullable=True)
+    vendor = Column(String(255), nullable=True)
+    inventory_tracker = Column(String(50), nullable=True)
+    inventory_policy = Column(String(50), nullable=True)
 
     merchant = relationship("Merchant", back_populates="products")
