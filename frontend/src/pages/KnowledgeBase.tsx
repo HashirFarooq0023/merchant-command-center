@@ -1,48 +1,95 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Upload, FileSpreadsheet, Check, RefreshCw, ToggleLeft, ToggleRight, AlertCircle } from "lucide-react";
+import { Upload, FileSpreadsheet, Check, RefreshCw, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@clerk/clerk-react";
 import { useToast } from "@/hooks/use-toast";
-
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const KnowledgeBase = () => {
   const { getToken } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [processedCount, setProcessedCount] = useState<number | null>(null);
-  const [products, setProducts] = useState<any[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
 
   // Hidden input reference for standard clicks
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchProducts = async () => {
-    try {
-      setLoadingProducts(true);
+  // 1. Fetch products using React Query
+  const { data: products = [], isLoading: loadingProducts } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
       const token = await getToken();
       const response = await fetch("http://localhost:8000/products", {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (response.ok) {
+      if (!response.ok) throw new Error("Failed to fetch products");
+      return (await response.json()) as any[];
+    },
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+
+  // Mutate clear catalog
+  const clearCatalogMutation = useMutation({
+    mutationFn: async () => {
+      const token = await getToken();
+      const response = await fetch("http://localhost:8000/products", {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!response.ok) {
         const data = await response.json();
-        setProducts(data);
+        throw new Error(data.detail || "Failed to clear catalog");
       }
-    } catch (error) {
-      console.error("Failed to fetch products:", error);
-    } finally {
-      setLoadingProducts(false);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Catalog Cleared", description: "All products have been deleted successfully." });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
+  });
+
+  const clearCatalog = () => {
+    if (!confirm("Are you sure you want to delete all products from your catalog? This cannot be undone.")) return;
+    clearCatalogMutation.mutate();
   };
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  // Mutate delete product
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const token = await getToken();
+      const response = await fetch(`http://localhost:8000/products/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || "Failed to delete product");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Product Deleted", description: "The product was removed successfully." });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const deleteProduct = (id: number) => {
+    if (!confirm("Are you sure you want to delete this product?")) return;
+    deleteProductMutation.mutate(id);
+  };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -101,6 +148,8 @@ const KnowledgeBase = () => {
         description: `Successfully processed ${data.processed_variants} product variants into your AI Knowledge Engine.`,
       });
 
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+
     } catch (error: any) {
       console.error("Upload error:", error);
       toast({
@@ -130,16 +179,32 @@ const KnowledgeBase = () => {
   };
 
   const toggleStock = (id: number) => {
-    setProducts(products.map((p) => (p.id === id ? { ...p, stock: !p.stock } : p)));
+    queryClient.setQueryData(['products'], (old: any[]) => {
+      if (!old) return old;
+      return old.map((p) => (p.id === id ? { ...p, stock: !p.stock } : p));
+    });
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Knowledge Base</h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          Upload your product catalog to train the AI
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Knowledge Base</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Upload your product catalog to train the AI
+          </p>
+        </div>
+        {products.length > 0 && (
+          <Button
+            variant="destructive"
+            onClick={clearCatalog}
+            disabled={clearCatalogMutation.isPending || syncing}
+            className="flex items-center gap-2"
+          >
+            {clearCatalogMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            Clear Catalog
+          </Button>
+        )}
       </div>
 
       {/* Upload Zone */}
@@ -227,7 +292,7 @@ const KnowledgeBase = () => {
                     onClick={() => {
                       setFile(null);
                       setProcessedCount(null);
-                      fetchProducts(); // Refresh table when dialog dismissed
+                      queryClient.invalidateQueries({ queryKey: ['products'] }); // Refresh table when dialog dismissed
                     }}
                   >
                     Upload Another File
@@ -270,19 +335,22 @@ const KnowledgeBase = () => {
                 <th className="text-center text-xs font-medium text-muted-foreground p-4">
                   In Stock
                 </th>
+                <th className="text-right text-xs font-medium text-muted-foreground p-4">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {loadingProducts ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
                     <RefreshCw className="h-4 w-4 animate-spin inline-block mr-2 text-primary" />
                     Loading product catalog...
                   </td>
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
                     No products found. Please upload a CSV above to populate your database!
                   </td>
                 </tr>
@@ -312,6 +380,16 @@ const KnowledgeBase = () => {
                           <ToggleLeft className="h-6 w-6 text-muted-foreground" />
                         )}
                       </button>
+                    </td>
+                    <td className="p-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+                        onClick={() => deleteProduct(product.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))

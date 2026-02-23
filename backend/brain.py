@@ -109,10 +109,12 @@ agent_executor = create_react_agent(
 
 # Main entry point for the API
 async def process_chat_message(message: str, session_id: str, merchant_id: str):
+    search_results = []
     config = {
         "configurable": {
             "thread_id": f"{merchant_id}:{session_id}",
-            "merchant_id": merchant_id
+            "merchant_id": merchant_id,
+            "search_results": search_results
         }
     }
     
@@ -143,4 +145,7 @@ async def process_chat_message(message: str, session_id: str, merchant_id: str):
             finally:
                 db.close()
                 
-    return ai_message
+    return {
+        "response": ai_message,
+        "search_results": search_results
+    }

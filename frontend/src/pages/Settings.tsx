@@ -33,7 +33,7 @@ const Settings = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 w-full">
       <div>
         <h2 className="text-2xl font-bold text-foreground">Settings</h2>
         <p className="text-muted-foreground text-sm mt-1">
@@ -162,7 +162,7 @@ const Settings = () => {
           value={systemPrompt}
           onChange={(e) => setSystemPrompt(e.target.value)}
           rows={10}
-          className="bg-secondary border-border text-foreground font-mono text-sm resize-y"
+          className="bg-secondary border-border text-foreground font-mono text-sm resize-y w-full"
         />
       </motion.div>
 

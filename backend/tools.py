@@ -32,7 +32,7 @@ def search_products(query: str, config: RunnableConfig, limit: int = 5) -> str:
             query_embeddings=[query_embedding],
             n_results=limit,
             where={"merchant_id": merchant_id},
-            include=['metadatas', 'documents']
+            include=['metadatas', 'documents', 'distances']
         )
         
         if not results['documents'] or not results['documents'][0]:
@@ -43,9 +43,17 @@ def search_products(query: str, config: RunnableConfig, limit: int = 5) -> str:
         # We need to query the database to get the live image URLs for these matched vectors
         db: Session = SessionLocal()
         try:
+            search_results_list = config["configurable"].get("search_results")
+            
             for i, doc in enumerate(results['documents'][0]):
                 meta = results['metadatas'][0][i]
                 sku = meta.get("sku", "")
+                
+                # Default Chroma L2 distance for normalized vectors is between 0 and 2.
+                # Cosine similarity = 1 - (distance^2 / 2). If distance is already L2 squared (which Chroma uses by default for embeddings):
+                # Similarity % = (1 - (distance / 2)) * 100
+                distance = results['distances'][0][i] if 'distances' in results and results['distances'] else 0
+                similarity_score = max(0, min(100, (1 - (distance / 2)) * 100))
                 
                 image_url_text = ""
                 if sku:
@@ -53,8 +61,18 @@ def search_products(query: str, config: RunnableConfig, limit: int = 5) -> str:
                         models.Product.sku == sku,
                         models.Product.merchant_id == merchant_id
                     ).first()
-                    if product and product.image_url:
-                        image_url_text = f"\nImage URL: {product.image_url}"
+                    
+                    if product:
+                        if search_results_list is not None:
+                             # Prevent duplicates in the visual list
+                             if not any(item.get("name") == product.title for item in search_results_list):
+                                 search_results_list.append({
+                                     "name": product.title,
+                                     "score": similarity_score
+                                 })
+                             
+                        if product.image_url:
+                            image_url_text = f"\nImage URL: {product.image_url}"
                 
                 formatted_results += f"- {doc}{image_url_text}\n"
         finally:
@@ -144,7 +162,8 @@ def place_cod_order(
         db.add(order_item)
             
         db.commit()
-        return f"Order placed successfully! Order ID is #{new_order.id}. Total amount to be paid on delivery: Rs. {actual_total:.2f}."
+        formatted_id = f"ORD-{new_order.id:04d}"
+        return f"Order placed successfully! Order ID is #{formatted_id}. Total amount to be paid on delivery: Rs. {actual_total:.2f}."
         
     except Exception as e:
         db.rollback()

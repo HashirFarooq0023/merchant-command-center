@@ -80,6 +80,7 @@ const AISimulator = () => {
   const [input, setInput] = useState("");
   const [orderState, setOrderState] = useState(mockOrderState);
   const [isLoading, setIsLoading] = useState(false);
+  const [vectorResults, setVectorResults] = useState<{ name: string, score: number }[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [showTrialModal, setShowTrialModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -137,6 +138,10 @@ const AISimulator = () => {
       }
 
       const data = await res.json();
+
+      if (data.search_results) {
+        setVectorResults(data.search_results);
+      }
 
       // If we are mocking the backend logic here locally for testing instead:
       if (data.response === "TRIAL_EXPIRED" || data.error === "TRIAL_EXPIRED") {
@@ -336,17 +341,23 @@ const AISimulator = () => {
               Vector Search Results
             </h3>
             <div className="space-y-2">
-              {mockDebugProducts.map((p, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border/50"
-                >
-                  <span className="text-xs text-foreground">{p.name}</span>
-                  <span className="text-xs font-mono text-primary">
-                    {p.score.toFixed(2)}
-                  </span>
+              {vectorResults.length === 0 ? (
+                <div className="flex items-center justify-center p-4 rounded-lg bg-secondary/30 border border-border/50 border-dashed">
+                  <span className="text-xs text-muted-foreground">No recent search results</span>
                 </div>
-              ))}
+              ) : (
+                vectorResults.map((result, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border/50"
+                  >
+                    <span className="text-xs text-foreground font-medium">{result.name}</span>
+                    <span className="text-xs font-mono text-primary">
+                      {result.score.toFixed(1)}%
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
