@@ -4,22 +4,22 @@ from typing import List
 from database import SessionLocal
 from models import Product, Merchant
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from sqlalchemy.orm import Session
 
 # Allowable columns per specification
 ALLOWED_COLUMNS = [
-    "Handle", "Title", "Vendor", "Custom Product Type", "Tags", "Published", 
+    "Handle", "Title", "Body (HTML)", "Description", "Vendor", "Custom Product Type", "Tags", "Published", 
     "Option1 Name", "Option1 Value", "Option2 Name", "Option2 Value", 
     "Option3 Name", "Option3 Value", "Variant SKU", "Variant Grams", 
-    "Variant Inventory Tracker", "Variant Inventory Policy", "Variant Price", 
+    "Variant Inventory Policy", "Variant Inventory Qty", "Variant Price", 
     "Image Src", "Image Position", "Image Alt Text", "SEO Title", 
     "SEO Description", "Variant Image", "Variant Weight Unit", "Cost per item", 
-    "Price / International", "Status"
+    "Price / International", "Status", "Image URL 1", "Image URL 2", "Image URL 3", "Image URL 4", "Image URL 5"
 ]
 
 # Columns that Shopify leaves blank for variants that we should forward-fill
-FFILL_COLUMNS = ["Title", "Vendor", "Custom Product Type", "Tags", "SEO Description", "Image Src", "Status", "Published"]
+FFILL_COLUMNS = ["Title", "Body (HTML)", "Description", "Vendor", "Custom Product Type", "Tags", "SEO Description", "Image Src", "Status", "Published", "Image URL 1", "Image URL 2", "Image URL 3", "Image URL 4", "Image URL 5"]
 
 embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
 vectorstore = Chroma(
@@ -102,12 +102,19 @@ def process_shopify_csv(file_path: str, merchant_id: str) -> int:
             title = str(row.get("Title", ""))
             price = float(row.get("Variant Price", 0.0))
             vendor = str(row.get("Vendor", ""))
-            img_src = str(row.get("Variant Image", "")) or str(row.get("Image Src", ""))
-            inv_tracker = str(row.get("Variant Inventory Tracker", ""))
+            img1 = str(row.get("Image URL 1", "")) or str(row.get("Variant Image", "")) or str(row.get("Image Src", ""))
+            img2 = str(row.get("Image URL 2", ""))
+            img3 = str(row.get("Image URL 3", ""))
+            img4 = str(row.get("Image URL 4", ""))
+            img5 = str(row.get("Image URL 5", ""))
+            desc = str(row.get("Description", "")) or str(row.get("Body (HTML)", "")) or str(row.get("SEO Description", ""))
+            
+            raw_qty = str(row.get("Variant Inventory Qty", "")).strip()
+            instock = int(float(raw_qty)) if raw_qty else 0
+            
             inv_policy = str(row.get("Variant Inventory Policy", ""))
             cat = str(row.get("Custom Product Type", ""))
             tags = str(row.get("Tags", ""))
-            seo_desc = str(row.get("SEO Description", ""))
             
             # Options
             opt1n, opt1v = str(row.get("Option1 Name", "")), str(row.get("Option1 Value", ""))
@@ -124,10 +131,15 @@ def process_shopify_csv(file_path: str, merchant_id: str) -> int:
                 if existing_product:
                     existing_product.handle = handle
                     existing_product.title = title
+                    existing_product.description = desc
                     existing_product.price = price
-                    existing_product.image_url = img_src
+                    existing_product.image_url_1 = img1
+                    existing_product.image_url_2 = img2
+                    existing_product.image_url_3 = img3
+                    existing_product.image_url_4 = img4
+                    existing_product.image_url_5 = img5
                     existing_product.vendor = vendor
-                    existing_product.inventory_tracker = inv_tracker
+                    existing_product.instock = instock
                     existing_product.inventory_policy = inv_policy
                 else:
                     new_product = Product(
@@ -135,10 +147,15 @@ def process_shopify_csv(file_path: str, merchant_id: str) -> int:
                         handle=handle,
                         sku=sku,
                         title=title,
+                        description=desc,
                         price=price,
-                        image_url=img_src,
+                        image_url_1=img1,
+                        image_url_2=img2,
+                        image_url_3=img3,
+                        image_url_4=img4,
+                        image_url_5=img5,
                         vendor=vendor,
-                        inventory_tracker=inv_tracker,
+                        instock=instock,
                         inventory_policy=inv_policy
                     )
                     db.add(new_product)
@@ -150,7 +167,7 @@ def process_shopify_csv(file_path: str, merchant_id: str) -> int:
             if opt3n and opt3v: opts.append(f"{opt3n}: {opt3v}")
             options_text = ", ".join(opts)
 
-            doc_text = f"Product: {title} ({sku}). Category: {cat}. Tags: {tags}. Description: {seo_desc}. Options: {options_text}. Price: {price}. Inventory Policy: {inv_policy}."
+            doc_text = f"Product: {title} ({sku}). Category: {cat}. Tags: {tags}. Description: {desc}. Options: {options_text}. Price: {price}. In Stock: {instock}. Inventory Policy: {inv_policy}."
             
             docs_to_embed.append(doc_text)
             metadatas.append({

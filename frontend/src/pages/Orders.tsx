@@ -212,147 +212,155 @@ const Orders = () => {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order) => (
-                <optgroup key={order.id} className="contents">
-                  <tr
-                    className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${expandedOrderId === order.id ? "bg-muted/10 border-b-transparent" : ""
-                      }`}
-                  >
-                    <td className="p-4 text-sm font-mono text-primary font-medium">
-                      <div className="flex flex-col">
-                        <span>{order.id}</span>
-                        {order.created_at && (
-                          <span className="text-[10px] text-muted-foreground font-sans mt-0.5">
-                            {new Date(order.created_at).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4 text-sm text-foreground font-medium">
-                      {order.customer}
-                    </td>
-                    <td className="p-4 text-sm text-muted-foreground font-mono">
-                      {order.phone}
-                    </td>
-                    <td className="p-4 text-sm text-foreground font-medium">
-                      {order.total}
-                    </td>
-                    <td className="p-4">
-                      <div className="relative inline-block w-full min-w-[110px]">
-                        <select
-                          value={order.status}
-                          onChange={(e) =>
-                            updateStatus(order.id, order.original_id, e.target.value as OrderStatus)
-                          }
-                          className={`appearance-none w-full text-xs font-medium px-3 pr-8 py-1.5 rounded-xl border-0 outline-none cursor-pointer ${statusColors[order.status] || "bg-muted text-foreground"}`}
-                        >
-                          <option className="bg-background text-foreground font-sans" value="Pending">Pending</option>
-                          <option className="bg-background text-foreground font-sans" value="Confirmed">Confirmed</option>
-                          <option className="bg-background text-foreground font-sans" value="Shipped">Shipped</option>
-                          <option className="bg-background text-foreground font-sans" value="Cancelled">Cancelled</option>
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 opacity-50 pointer-events-none" />
-                      </div>
-                    </td>
-                    <td className="p-4 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-primary hover:text-primary hover:bg-primary/10"
-                        onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
-                      >
-                        {expandedOrderId === order.id ? (
-                          <>Close <ChevronUp className="h-4 w-4 ml-1" /></>
-                        ) : (
-                          <>Details <ChevronDown className="h-4 w-4 ml-1" /></>
-                        )}
-                      </Button>
-                    </td>
-                  </tr>
-
-                  {/* Dropdown Row */}
-                  <AnimatePresence initial={false}>
-                    {expandedOrderId === order.id && (
-                      <tr className="border-b border-border/50 bg-muted/10">
-                        <td colSpan={6} className="p-0">
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 border-t border-border/50">
-                              {/* Left Col - Info */}
-                              <div className="space-y-6">
-                                <div>
-                                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                                    <User className="h-3 w-3" /> Delivery Address
-                                  </h4>
-                                  <div className="bg-card border border-border/50 rounded-lg p-3 text-sm">
-                                    <p className="font-medium text-foreground mb-1">{order.customer}</p>
-                                    <p className="text-muted-foreground leading-relaxed flex items-start gap-2">
-                                      <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
-                                      {order.address}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                                    <CreditCard className="h-3 w-3" /> Payment Method
-                                  </h4>
-                                  <div className="bg-card border border-border/50 rounded-lg p-3 text-sm flex items-center justify-between">
-                                    <span className="font-medium">Cash on Delivery (COD)</span>
-                                    <span className="font-mono text-primary">{order.total}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Right Col - Items */}
-                              <div>
-                                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                                  <Package className="h-3 w-3" /> Ordered Items
-                                </h4>
-                                <div className="space-y-2">
-                                  {order.detailed_items?.map((item, idx) => (
-                                    <div key={idx} className="flex gap-3 p-2.5 rounded-lg border border-border/50 bg-card hover:bg-muted/10 transition-colors">
-                                      <div className="h-12 w-12 rounded bg-muted flex-shrink-0 border border-border overflow-hidden">
-                                        {item.image_url ? (
-                                          <img src={item.image_url} alt={item.title} className="h-full w-full object-cover" />
-                                        ) : (
-                                          <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">No Img</div>
-                                        )}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium leading-tight truncate">{item.title}</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5 font-mono">SKU: {item.sku}</p>
-                                      </div>
-                                      <div className="flex flex-col items-end justify-center pl-2 border-l border-border/50">
-                                        <p className="text-sm font-medium">{item.price}</p>
-                                        <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
-                                      </div>
-                                    </div>
-                                  ))}
-                                  {!order.detailed_items?.length && (
-                                    <p className="text-sm text-muted-foreground">{order.items}</p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        </td>
-                      </tr>
-                    )}
-                  </AnimatePresence>
-                </optgroup>
-              ))}
-              {filtered.length === 0 && !isLoading && (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
+                    <RefreshCw className="h-4 w-4 animate-spin inline-block mr-2 text-primary" />
+                    Loading orders...
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-12 text-center text-muted-foreground">
                     <p className="text-sm">No orders found matching your criteria.</p>
                   </td>
                 </tr>
+              ) : (
+                filtered.map((order) => (
+                  <optgroup key={order.id} className="contents">
+                    <tr
+                      className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${expandedOrderId === order.id ? "bg-muted/10 border-b-transparent" : ""
+                        }`}
+                    >
+                      <td className="p-4 text-sm font-mono text-primary font-medium">
+                        <div className="flex flex-col">
+                          <span>{order.id}</span>
+                          {order.created_at && (
+                            <span className="text-[10px] text-muted-foreground font-sans mt-0.5">
+                              {new Date(order.created_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 text-sm text-foreground font-medium">
+                        {order.customer}
+                      </td>
+                      <td className="p-4 text-sm text-muted-foreground font-mono">
+                        {order.phone}
+                      </td>
+                      <td className="p-4 text-sm text-foreground font-medium">
+                        {order.total}
+                      </td>
+                      <td className="p-4">
+                        <div className="relative inline-block w-full min-w-[110px]">
+                          <select
+                            value={order.status}
+                            onChange={(e) =>
+                              updateStatus(order.id, order.original_id, e.target.value as OrderStatus)
+                            }
+                            className={`appearance-none w-full text-xs font-medium px-3 pr-8 py-1.5 rounded-xl border-0 outline-none cursor-pointer ${statusColors[order.status] || "bg-muted text-foreground"}`}
+                          >
+                            <option className="bg-background text-foreground font-sans" value="Pending">Pending</option>
+                            <option className="bg-background text-foreground font-sans" value="Confirmed">Confirmed</option>
+                            <option className="bg-background text-foreground font-sans" value="Shipped">Shipped</option>
+                            <option className="bg-background text-foreground font-sans" value="Cancelled">Cancelled</option>
+                          </select>
+                          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 opacity-50 pointer-events-none" />
+                        </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                          onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+                        >
+                          {expandedOrderId === order.id ? (
+                            <>Close <ChevronUp className="h-4 w-4 ml-1" /></>
+                          ) : (
+                            <>Details <ChevronDown className="h-4 w-4 ml-1" /></>
+                          )}
+                        </Button>
+                      </td>
+                    </tr>
+
+                    {/* Dropdown Row */}
+                    <AnimatePresence initial={false}>
+                      {expandedOrderId === order.id && (
+                        <tr className="border-b border-border/50 bg-muted/10">
+                          <td colSpan={6} className="p-0">
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 border-t border-border/50">
+                                {/* Left Col - Info */}
+                                <div className="space-y-6">
+                                  <div>
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                                      <User className="h-3 w-3" /> Delivery Address
+                                    </h4>
+                                    <div className="bg-card border border-border/50 rounded-lg p-3 text-sm">
+                                      <p className="font-medium text-foreground mb-1">{order.customer}</p>
+                                      <p className="text-muted-foreground leading-relaxed flex items-start gap-2">
+                                        <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                                        {order.address}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                                      <CreditCard className="h-3 w-3" /> Payment Method
+                                    </h4>
+                                    <div className="bg-card border border-border/50 rounded-lg p-3 text-sm flex items-center justify-between">
+                                      <span className="font-medium">Cash on Delivery (COD)</span>
+                                      <span className="font-mono text-primary">{order.total}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right Col - Items */}
+                                <div>
+                                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                                    <Package className="h-3 w-3" /> Ordered Items
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {order.detailed_items?.map((item, idx) => (
+                                      <div key={idx} className="flex gap-3 p-2.5 rounded-lg border border-border/50 bg-card hover:bg-muted/10 transition-colors">
+                                        <div className="h-12 w-12 rounded bg-muted flex-shrink-0 border border-border overflow-hidden">
+                                          {item.image_url ? (
+                                            <img src={item.image_url} alt={item.title} className="h-full w-full object-cover" />
+                                          ) : (
+                                            <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">No Img</div>
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium leading-tight truncate">{item.title}</p>
+                                          <p className="text-xs text-muted-foreground mt-0.5 font-mono">SKU: {item.sku}</p>
+                                        </div>
+                                        <div className="flex flex-col items-end justify-center pl-2 border-l border-border/50">
+                                          <p className="text-sm font-medium">{item.price}</p>
+                                          <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {!order.detailed_items?.length && (
+                                      <p className="text-sm text-muted-foreground">{order.items}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          </td>
+                        </tr>
+                      )}
+                    </AnimatePresence>
+                  </optgroup>
+                ))
               )}
             </tbody>
           </table>

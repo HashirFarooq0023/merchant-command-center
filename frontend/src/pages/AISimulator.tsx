@@ -49,8 +49,10 @@ const renderWhatsAppMessage = (content: string) => {
       <img
         src={url}
         alt="Product Attachment"
+        referrerPolicy="no-referrer"
         className="w-full max-w-[250px] h-auto rounded-lg shadow-sm object-cover"
         onError={(e) => {
+          console.error("Image failed to load:", url);
           // Fallback if image fails to load (e.g., broken URL from Shopify)
           const target = e.target as HTMLImageElement;
           target.src = "https://placehold.co/400x400/png?text=Image+Unavailable";
@@ -76,20 +78,34 @@ const renderWhatsAppMessage = (content: string) => {
 
 const AISimulator = () => {
   const { getToken } = useAuth();
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem("ai_sim_messages");
+    return saved ? JSON.parse(saved) : initialMessages;
+  });
   const [input, setInput] = useState("");
-  const [orderState, setOrderState] = useState(mockOrderState);
+  const [orderState, setOrderState] = useState(() => {
+    const saved = localStorage.getItem("ai_sim_order");
+    return saved ? JSON.parse(saved) : mockOrderState;
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [vectorResults, setVectorResults] = useState<{ name: string, score: number }[]>([]);
-  const [sessionId, setSessionId] = useState("");
+  const [vectorResults, setVectorResults] = useState<{ name: string, score: number }[]>(() => {
+    const saved = localStorage.getItem("ai_sim_vector");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [sessionId, setSessionId] = useState(() => {
+    const saved = localStorage.getItem("ai_sim_session");
+    return saved || uuidv4();
+  });
   const [showTrialModal, setShowTrialModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Generate a unique session ID for this chat instance
-    setSessionId(uuidv4());
-  }, []);
+    localStorage.setItem("ai_sim_messages", JSON.stringify(messages));
+    localStorage.setItem("ai_sim_order", JSON.stringify(orderState));
+    localStorage.setItem("ai_sim_vector", JSON.stringify(vectorResults));
+    if (sessionId) localStorage.setItem("ai_sim_session", sessionId);
+  }, [messages, orderState, vectorResults, sessionId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -143,6 +159,10 @@ const AISimulator = () => {
         setVectorResults(data.search_results);
       }
 
+      if (data.order_extraction) {
+        setOrderState(data.order_extraction);
+      }
+
       // If we are mocking the backend logic here locally for testing instead:
       if (data.response === "TRIAL_EXPIRED" || data.error === "TRIAL_EXPIRED") {
         setShowTrialModal(true);
@@ -154,15 +174,18 @@ const AISimulator = () => {
       let textContent = data.response;
 
       // Regex catches standard markdown images AND raw trailing URLs prefixed by 'Image URL:'
-      const imgRegex = /(?:\[.*?\]\((https?:\/\/[^\s\)]+)\))|(?:Image URL:\s*(https?:\/\/[^\s]+))/gi;
+      const imgRegex = /!?(?:\[.*?\]\((https?:\/\/[^\s\)]+)\))|(?:Image URL:\s*(https?:\/\/[^\s]+))/gi;
 
       const imageUrls: string[] = [];
       let match;
 
       // Extract all URLs
       while ((match = imgRegex.exec(data.response)) !== null) {
-        const url = match[1] || match[2];
+        let url = match[1] || match[2];
         if (url) {
+          // Clean up trailing punctuation that might get caught
+          url = url.replace(/[.,;!?"')]+$/, '');
+          console.log("Extracted URL:", url);
           imageUrls.push(url);
         }
       }
@@ -208,6 +231,7 @@ const AISimulator = () => {
   const resetChat = () => {
     setMessages(initialMessages);
     setOrderState(mockOrderState);
+    setVectorResults([]);
     setSessionId(uuidv4()); // Start a new session
   };
 
@@ -381,7 +405,7 @@ const AISimulator = () => {
                       : "text-primary"
                       }`}
                   >
-                    {val}
+                    {String(val)}
                   </span>
                 </div>
               ))}

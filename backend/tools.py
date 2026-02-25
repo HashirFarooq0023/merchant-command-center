@@ -63,6 +63,23 @@ def search_products(query: str, config: RunnableConfig, limit: int = 5) -> str:
                     ).first()
                     
                     if product:
+                        # Log ONLY the top 1 product query to keep the dashboard accurate to what the user actually asked for
+                        if i == 0:
+                            query_log = db.query(models.ProductQuery).filter(
+                                models.ProductQuery.product_sku == sku,
+                                models.ProductQuery.merchant_id == merchant_id
+                            ).first()
+                            
+                            if query_log:
+                                query_log.query_count += 1
+                            else:
+                                new_query = models.ProductQuery(
+                                    merchant_id=merchant_id,
+                                    product_sku=sku,
+                                    product_title=product.title
+                                )
+                                db.add(new_query)
+                        
                         if search_results_list is not None:
                              # Prevent duplicates in the visual list
                              if not any(item.get("name") == product.title for item in search_results_list):
@@ -71,10 +88,15 @@ def search_products(query: str, config: RunnableConfig, limit: int = 5) -> str:
                                      "score": similarity_score
                                  })
                              
-                        if product.image_url:
-                            image_url_text = f"\nImage URL: {product.image_url}"
+                        if product.image_url_1:
+                            image_url_text = f"\nImage URL: {product.image_url_1}"
                 
                 formatted_results += f"- {doc}{image_url_text}\n"
+            
+            db.commit() # Save the query logs
+        except Exception as query_e:
+            db.rollback()
+            print(f"Non-fatal error logging query: {query_e}")
         finally:
             db.close()
             
@@ -161,8 +183,17 @@ def place_cod_order(
         order_item.order_id = new_order.id
         db.add(order_item)
             
-        db.commit()
         formatted_id = f"ORD-{new_order.id:04d}"
+        
+        # E. Activity Log
+        log = models.ActivityLog(
+            merchant_id=merchant_id,
+            action_text=f"Order {formatted_id} confirmed by AI",
+            action_type="success"
+        )
+        db.add(log)
+        
+        db.commit()
         return f"Order placed successfully! Order ID is #{formatted_id}. Total amount to be paid on delivery: Rs. {actual_total:.2f}."
         
     except Exception as e:
@@ -236,6 +267,15 @@ def cancel_order(order_id: int, config: RunnableConfig) -> str:
             return f"Order #{order_id} is already cancelled."
             
         order.status = "Cancelled"
+        
+        formatted_id = f"ORD-{order.id:04d}"
+        log = models.ActivityLog(
+            merchant_id=merchant_id,
+            action_text=f"Order {formatted_id} cancelled by AI",
+            action_type="warning"
+        )
+        db.add(log)
+        
         db.commit()
         return f"Successfully cancelled Order #{order_id}."
         

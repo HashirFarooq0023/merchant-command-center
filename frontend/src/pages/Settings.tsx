@@ -1,25 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Save, Webhook, Phone, Shield, MessageSquareText, Copy, Check, Key } from "lucide-react";
+import { Save, Webhook, Phone, Shield, MessageSquareText, Copy, Check, Key, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@clerk/clerk-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const Settings = () => {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
-  const [openAiKey, setOpenAiKey] = useState(localStorage.getItem("merchant_openai_key") || "");
-  const [systemPrompt, setSystemPrompt] = useState(
-    `You are a helpful shopping assistant for a Pakistani clothing store. Follow these rules:
-- Always greet the customer with "Assalam-o-Alaikum"
-- Respond in Urdu/English mixed language (Roman Urdu)
-- Tell customers delivery takes 3-5 working days
-- Delivery charges are Rs. 200
-- Payment method is Cash on Delivery (COD)
-- Be polite, friendly, and helpful
-- If you don't know something, tell the customer you'll connect them with a human agent`
-  );
+  const [tokenCopied, setTokenCopied] = useState(false);
 
-  const webhookUrl = "https://your-server.com/api/webhook/whatsapp";
+  const [storeName, setStoreName] = useState("");
+  const [openAiKey, setOpenAiKey] = useState("");
+  const [whatsappPhoneId, setWhatsappPhoneId] = useState("");
+  const [whatsappBusinessId, setWhatsappBusinessId] = useState("");
+  const [whatsappToken, setWhatsappToken] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [verifyToken, setVerifyToken] = useState("Loading...");
+
+  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+  const { data: webhookData } = useQuery({
+    queryKey: ['webhook-url'],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${apiUrl}/settings/webhook-url`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) return { url: "Ngrok tunnel not detected" };
+      return res.json();
+    }
+  });
+
+  const webhookUrl = webhookData?.url || "Loading...";
 
   const copyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -27,10 +43,79 @@ const Settings = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSave = () => {
-    localStorage.setItem("merchant_openai_key", openAiKey);
-    toast({ title: "Settings Saved", description: "Your configuration and API key have been updated" });
+  const copyToken = () => {
+    navigator.clipboard.writeText(verifyToken);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 2000);
   };
+
+  // Fetch Settings
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${apiUrl}/settings`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to load settings");
+      return res.json();
+    }
+  });
+
+  useEffect(() => {
+    if (settings) {
+      setStoreName(settings.store_name || "");
+      setOpenAiKey(settings.openai_api_key || "");
+      setWhatsappPhoneId(settings.whatsapp_phone_number_id || "");
+      setWhatsappBusinessId(settings.whatsapp_business_account_id || "");
+      setWhatsappToken(settings.whatsapp_access_token || "");
+      setSystemPrompt(settings.system_prompt || `- Delivery Charges: 250 PKR
+- Free Delivery: Orders above 2999 PKR
+- Delivery Time: 3–4 days
+- Parcel Policy: Cannot open before payment
+- Payment: Cash on Delivery (COD)`);
+      setVerifyToken(settings.webhook_verify_token || "Failed to generate token");
+    }
+  }, [settings]);
+
+  // Update Settings
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${apiUrl}/settings`, {
+        method: 'PUT',
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          store_name: storeName,
+          openai_api_key: openAiKey,
+          whatsapp_phone_number_id: whatsappPhoneId,
+          whatsapp_business_account_id: whatsappBusinessId,
+          whatsapp_access_token: whatsappToken,
+          system_prompt: systemPrompt
+        })
+      });
+      if (!res.ok) throw new Error("Failed to save settings");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Settings Saved", description: "Your configuration has been updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const handleSave = () => {
+    mutation.mutate();
+  };
+
+  if (isLoading) {
+    return <div className="flex h-[200px] items-center justify-center text-muted-foreground"><Loader2 className="w-8 h-8 animate-spin" /></div>;
+  }
 
   return (
     <div className="space-y-6 w-full">
@@ -41,10 +126,33 @@ const Settings = () => {
         </p>
       </div>
 
+      {/* General Settings */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card rounded-xl p-6"
+      >
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
+          Store Details
+        </h3>
+        <div>
+          <label className="text-xs text-muted-foreground mb-1.5 block">
+            Store Name
+          </label>
+          <input
+            value={storeName}
+            onChange={(e) => setStoreName(e.target.value)}
+            placeholder="e.g. Trends Store"
+            className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+      </motion.div>
+
       {/* WhatsApp API */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
         className="glass-card rounded-xl p-6"
       >
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
@@ -57,6 +165,8 @@ const Settings = () => {
               Phone Number ID
             </label>
             <input
+              value={whatsappPhoneId}
+              onChange={(e) => setWhatsappPhoneId(e.target.value)}
               placeholder="Enter Phone Number ID"
               className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
             />
@@ -66,6 +176,8 @@ const Settings = () => {
               Business Account ID
             </label>
             <input
+              value={whatsappBusinessId}
+              onChange={(e) => setWhatsappBusinessId(e.target.value)}
               placeholder="Enter WABA ID"
               className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
             />
@@ -76,6 +188,8 @@ const Settings = () => {
             </label>
             <input
               type="password"
+              value={whatsappToken}
+              onChange={(e) => setWhatsappToken(e.target.value)}
               placeholder="Enter your access token"
               className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
             />
@@ -122,29 +236,60 @@ const Settings = () => {
           <Webhook className="h-4 w-4 text-primary" />
           Webhook Configuration
         </h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          Paste this URL in your Meta Developer Console → Webhooks → Callback URL
+        <p className="text-xs text-muted-foreground mb-4">
+          Paste these credentials in your Meta Developer Console → Webhooks
         </p>
-        <div className="flex gap-2">
-          <div className="flex-1 bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground font-mono overflow-x-auto">
-            {webhookUrl}
+
+        <div className="space-y-5">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1.5 block">
+              Callback URL (Live Ngrok)
+            </label>
+            <div className="flex gap-2">
+              <div className="flex-1 bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground font-mono overflow-x-auto">
+                {webhookUrl}
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyWebhook}
+                className="shrink-0"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4 text-primary" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={copyWebhook}
-            className="shrink-0"
-          >
-            {copied ? (
-              <Check className="h-4 w-4 text-primary" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-          </Button>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1.5 block">
+              Verify Token
+            </label>
+            <div className="flex gap-2">
+              <div className="flex-1 bg-secondary rounded-lg px-4 py-2.5 text-sm text-foreground font-mono overflow-x-auto">
+                {verifyToken}
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyToken}
+                className="shrink-0"
+              >
+                {tokenCopied ? (
+                  <Check className="h-4 w-4 text-primary" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       </motion.div>
 
-      {/* System Prompt */}
+      {/* Policies & FAQs */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -153,10 +298,10 @@ const Settings = () => {
       >
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
           <MessageSquareText className="h-4 w-4 text-primary" />
-          System Prompt Editor
+          Policies & FAQs
         </h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Customize the AI&apos;s personality and rules for customer interactions
+          Customize your Store's delivery parameters and payment policies
         </p>
         <Textarea
           value={systemPrompt}
@@ -167,8 +312,8 @@ const Settings = () => {
       </motion.div>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} className="gradient-primary text-primary-foreground px-8">
-          <Save className="h-4 w-4 mr-2" />
+        <Button onClick={handleSave} disabled={mutation.isPending} className="gradient-primary text-primary-foreground px-8">
+          {mutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
           Save Settings
         </Button>
       </div>

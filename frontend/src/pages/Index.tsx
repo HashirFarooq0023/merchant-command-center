@@ -19,70 +19,69 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { useAuth } from "@clerk/clerk-react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
-const metrics = [
+// Base template, but we will override values dynamically
+const baseMetrics = [
   {
+    id: "total_orders",
     label: "Total Automated Orders",
-    value: "1,247",
-    change: "+12.5%",
+    value: "0",
+    change: "Live updates",
     trend: "up" as const,
     icon: ShoppingCart,
   },
   {
-    label: "Verification Success",
-    value: "94.2%",
-    change: "+3.1%",
+    id: "total_products",
+    label: "Synced Products",
+    value: "0",
+    change: "Live catalog",
     trend: "up" as const,
     icon: CheckCircle2,
   },
   {
-    label: "AI Messages Sent",
-    value: "18,439",
-    change: "+28.7%",
+    id: "tokens_used",
+    label: "AI Tokens Used",
+    value: "0",
+    change: "Running total",
     trend: "up" as const,
     icon: MessageSquare,
   },
   {
+    id: "est_cost",
     label: "Est. Token Cost",
-    value: "$42.18",
-    change: "-8.2%",
+    value: "Rs. 0.00",
+    change: "Based on 4o-mini",
     trend: "down" as const,
     icon: Coins,
   },
 ];
 
-const chartData = [
-  { day: "Mon", orders: 42, messages: 320 },
-  { day: "Tue", orders: 58, messages: 410 },
-  { day: "Wed", orders: 35, messages: 280 },
-  { day: "Thu", orders: 71, messages: 520 },
-  { day: "Fri", orders: 63, messages: 470 },
-  { day: "Sat", orders: 89, messages: 680 },
-  { day: "Sun", orders: 54, messages: 390 },
+const defaultChartData = [
+  { day: "Mon", orders: 0, messages: 0 },
+  { day: "Tue", orders: 0, messages: 0 },
+  { day: "Wed", orders: 0, messages: 0 },
+  { day: "Thu", orders: 0, messages: 0 },
+  { day: "Fri", orders: 0, messages: 0 },
+  { day: "Sat", orders: 0, messages: 0 },
+  { day: "Sun", orders: 0, messages: 0 },
 ];
 
-const topProducts = [
-  { name: "Lawn Collection 2024", queries: 342 },
-  { name: "Unstitched Fabric", queries: 278 },
-  { name: "Ready-to-Wear Kurta", queries: 195 },
-  { name: "Bridal Formal", queries: 167 },
-  { name: "Kids Summer Range", queries: 124 },
+const defaultTopProducts = [
+  { name: "No data yet", queries: 0 },
 ];
 
-const recentActivity = [
-  { text: "Order #1042 confirmed by AI", time: "2 min ago", type: "success" },
-  { text: "New product catalog synced (200 items)", time: "15 min ago", type: "info" },
-  { text: "Customer requested human support", time: "32 min ago", type: "warning" },
-  { text: "Order #1039 shipped via TCS", time: "1 hr ago", type: "success" },
-  { text: "AI handled complaint for Order #1035", time: "2 hr ago", type: "info" },
-  { text: "Order #1037 confirmed by AI", time: "3 hr ago", type: "success" },
+const defaultRecentActivity = [
+  { text: "Dashboard connected successfully", time: "Just now", type: "success" },
 ];
 
 const MetricCard = ({
   metric,
   index,
 }: {
-  metric: (typeof metrics)[0];
+  metric: (typeof baseMetrics)[0];
   index: number;
 }) => (
   <motion.div
@@ -107,9 +106,8 @@ const MetricCard = ({
         <TrendingDown className="h-3.5 w-3.5 text-accent" />
       )}
       <span
-        className={`text-xs font-medium ${
-          metric.trend === "up" ? "text-primary" : "text-accent"
-        }`}
+        className={`text-xs font-medium ${metric.trend === "up" ? "text-primary" : "text-accent"
+          }`}
       >
         {metric.change}
       </span>
@@ -119,8 +117,35 @@ const MetricCard = ({
 );
 
 const Dashboard = () => {
+  const { getToken } = useAuth();
+
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("http://localhost:8000/dashboard/stats", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to fetch dashboard stats");
+      return res.json();
+    }
+  });
+
+  const metrics = baseMetrics.map((m) => {
+    if (!stats) return m;
+    if (m.id === "total_orders") return { ...m, value: stats.total_orders.toLocaleString() };
+    if (m.id === "total_products") return { ...m, value: stats.total_products.toLocaleString() };
+    if (m.id === "tokens_used") return { ...m, value: stats.tokens_used.toLocaleString() };
+    if (m.id === "est_cost") return { ...m, value: stats.est_cost };
+    return m;
+  });
+
+  const chartData = stats?.chart_data?.length ? stats.chart_data : defaultChartData;
+  const topProducts = stats?.top_products?.length ? stats.top_products : defaultTopProducts;
+  const recentActivity = stats?.recent_activity?.length ? stats.recent_activity : defaultRecentActivity;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       <div>
         <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
         <p className="text-muted-foreground text-sm mt-1">
@@ -128,7 +153,12 @@ const Dashboard = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        )}
         {metrics.map((metric, i) => (
           <MetricCard key={metric.label} metric={metric} index={i} />
         ))}
@@ -234,13 +264,12 @@ const Dashboard = () => {
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`h-2 w-2 rounded-full ${
-                    item.type === "success"
-                      ? "bg-primary"
-                      : item.type === "warning"
+                  className={`h-2 w-2 rounded-full ${item.type === "success"
+                    ? "bg-primary"
+                    : item.type === "warning"
                       ? "bg-accent"
                       : "bg-chart-2"
-                  }`}
+                    }`}
                 />
                 <span className="text-sm text-foreground">{item.text}</span>
               </div>

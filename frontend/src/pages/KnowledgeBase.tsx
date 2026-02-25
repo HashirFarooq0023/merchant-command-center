@@ -1,22 +1,26 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Upload, FileSpreadsheet, Check, RefreshCw, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { Upload, FileSpreadsheet, Check, RefreshCw, ToggleLeft, ToggleRight, Trash2, Edit2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@clerk/clerk-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
 const KnowledgeBase = () => {
   const { getToken } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [processedCount, setProcessedCount] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Hidden input reference for standard clicks
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,6 +189,16 @@ const KnowledgeBase = () => {
     });
   };
 
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    if (!searchQuery.trim()) return products;
+    const lowerQuery = searchQuery.toLowerCase();
+    return products.filter((p: any) =>
+      (p.title && p.title.toLowerCase().includes(lowerQuery)) ||
+      (p.sku && p.sku.toLowerCase().includes(lowerQuery))
+    );
+  }, [products, searchQuery]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -311,13 +325,34 @@ const KnowledgeBase = () => {
         transition={{ delay: 0.2 }}
         className="glass-card rounded-xl overflow-hidden mt-8"
       >
-        <div className="p-5 border-b border-border">
-          <h3 className="text-sm font-semibold text-foreground">
-            Product Catalog Preview
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Toggle stock status to instantly update AI recommendations
-          </p>
+        <div className="p-5 border-b border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Product Catalog Preview
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Inventory policies guide AI recommendations when out of stock
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search products..."
+                className="pl-9 bg-background/50 border-border"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <Button
+              onClick={() => navigate("/add-product")}
+              className="flex items-center gap-2 whitespace-nowrap"
+            >
+              Add Product manually
+            </Button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -333,7 +368,10 @@ const KnowledgeBase = () => {
                   Description
                 </th>
                 <th className="text-center text-xs font-medium text-muted-foreground p-4">
-                  In Stock
+                  Quantity
+                </th>
+                <th className="text-center text-xs font-medium text-muted-foreground p-4">
+                  Inventory Policy
                 </th>
                 <th className="text-right text-xs font-medium text-muted-foreground p-4">
                   Actions
@@ -343,25 +381,26 @@ const KnowledgeBase = () => {
             <tbody>
               {loadingProducts ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
                     <RefreshCw className="h-4 w-4 animate-spin inline-block mr-2 text-primary" />
                     Loading product catalog...
                   </td>
                 </tr>
-              ) : products.length === 0 ? (
+              ) : filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
-                    No products found. Please upload a CSV above to populate your database!
+                  <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
+                    {searchQuery ? "No products found matching your search." : "No products found. Please upload a CSV or add one manually!"}
                   </td>
                 </tr>
               ) : (
-                products.map((product) => (
+                filteredProducts.map((product: any) => (
                   <tr
                     key={product.id}
                     className="border-b border-border/50 hover:bg-muted/20 transition-colors"
                   >
                     <td className="p-4 text-sm text-foreground font-medium">
-                      {product.title}
+                      <div>{product.title}</div>
+                      <div className="text-xs text-muted-foreground font-mono mt-0.5">{product.sku}</div>
                     </td>
                     <td className="p-4 text-sm text-muted-foreground">
                       {product.price}
@@ -369,19 +408,23 @@ const KnowledgeBase = () => {
                     <td className="p-4 text-sm text-muted-foreground max-w-[200px] truncate">
                       {product.description}
                     </td>
+                    <td className="p-4 text-center text-sm font-medium">
+                      {product.instock !== undefined ? product.instock : '-'}
+                    </td>
                     <td className="p-4 text-center">
-                      <button
-                        onClick={() => toggleStock(product.id)}
-                        className="inline-flex items-center"
-                      >
-                        {product.stock ? (
-                          <ToggleRight className="h-6 w-6 text-primary" />
-                        ) : (
-                          <ToggleLeft className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </button>
+                      <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${product.inventory_policy === 'continue' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                        {product.inventory_policy === 'continue' ? 'Continue Selling' : 'Stop Selling'}
+                      </span>
                     </td>
                     <td className="p-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-primary hover:text-primary hover:bg-primary/10 h-8 w-8 mr-1"
+                        onClick={() => navigate(`/edit-product/${product.id}`)}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

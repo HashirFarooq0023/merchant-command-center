@@ -14,6 +14,8 @@ import Conversations from "./pages/Conversations";
 import Settings from "./pages/Settings";
 import LoginPage from "./pages/LoginPage";
 import NotFound from "./pages/NotFound";
+import AddProduct from "./pages/AddProduct";
+import EditProduct from "./pages/EditProduct";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +40,8 @@ const App = () => (
               <Route path="/orders" element={<Orders />} />
               <Route path="/conversations" element={<Conversations />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/add-product" element={<AddProduct />} />
+              <Route path="/edit-product/:id" element={<EditProduct />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </DashboardLayout>

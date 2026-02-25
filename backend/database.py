@@ -8,7 +8,11 @@ load_dotenv(override=True)
 
 # MySQL Setup
 MYSQL_URI = os.getenv("MYSQL_URI")
-engine = create_engine(MYSQL_URI)
+engine = create_engine(
+    MYSQL_URI,
+    pool_pre_ping=True,  # Test connections before handing them out
+    pool_recycle=3600,   # Recycle connections every hour to prevent timeouts
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
