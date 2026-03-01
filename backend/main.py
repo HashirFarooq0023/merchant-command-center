@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.responses import FileResponse
 import os
 import uuid
 import random
@@ -14,7 +15,7 @@ from database import get_db
 from whatsapp import router as whatsapp_router
 from sqlalchemy.orm import Session
 from models import Product, Order, Customer, OrderItem
-from pydantic import BaseModel
+
 from typing import Optional
 
 app = FastAPI(title="Merchant Command Center AI Bot API")
@@ -124,7 +125,7 @@ def get_webhook_url(merchant_id: str = Depends(get_current_merchant)):
             if tunnels:
                 return {"url": f"{tunnels[0]['public_url']}/webhook/whatsapp"}
         return {"url": "Ngrok tunnel not detected"}
-    except Exception as e:
+    except Exception:
         return {"url": "Ngrok tunnel not detected"}
 
 @app.get("/products")
@@ -291,7 +292,6 @@ def get_orders(merchant_id: str = Depends(get_current_merchant), db: Session = D
 def get_dashboard_stats(merchant_id: str = Depends(get_current_merchant), db: Session = Depends(get_db)):
     try:
         from models import Merchant, ProductQuery, ActivityLog
-        from sqlalchemy import func
         from datetime import datetime, timedelta
         
         total_orders = db.query(Order).filter(Order.merchant_id == merchant_id).count()
@@ -431,6 +431,22 @@ async def upload_catalog(
         if os.path.exists(temp_filepath):
             os.remove(temp_filepath)
 
+@app.get("/download-sample-csv")
+def download_sample_csv():
+    # Serve the generated sample_products_100.csv directly
+    csv_path = os.path.join(os.getcwd(), "sample_products_100.csv")
+    if not os.path.exists(csv_path):
+        raise HTTPException(status_code=404, detail="Sample CSV not generated yet.")
+    return FileResponse(path=csv_path, filename="sample_products_100.csv", media_type="text/csv")
+
+@app.get("/download-csv-template")
+def download_csv_template():
+    # Serve the empty template CSV
+    csv_path = os.path.join(os.getcwd(), "sample_template.csv")
+    if not os.path.exists(csv_path):
+        raise HTTPException(status_code=404, detail="Empty Template CSV not generated yet.")
+    return FileResponse(path=csv_path, filename="sample_template.csv", media_type="text/csv")
+
 @app.delete("/products")
 def delete_all_products(merchant_id: str = Depends(get_current_merchant), db: Session = Depends(get_db)):
     try:
@@ -564,7 +580,7 @@ async def upload_product_image(
         # Assuming backend is on port 8000
         url = f"http://localhost:8000/uploads/{unique_filename}"
         return {"url": url}
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Failed to upload image")

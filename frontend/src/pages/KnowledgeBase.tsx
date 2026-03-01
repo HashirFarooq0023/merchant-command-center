@@ -1,7 +1,18 @@
 import { useState, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Upload, FileSpreadsheet, Check, RefreshCw, ToggleLeft, ToggleRight, Trash2, Edit2, Search } from "lucide-react";
+import { Upload, FileSpreadsheet, Check, RefreshCw, ToggleLeft, ToggleRight, Trash2, Edit2, Search, Download, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@clerk/clerk-react";
@@ -63,7 +74,6 @@ const KnowledgeBase = () => {
   });
 
   const clearCatalog = () => {
-    if (!confirm("Are you sure you want to delete all products from your catalog? This cannot be undone.")) return;
     clearCatalogMutation.mutate();
   };
 
@@ -156,10 +166,19 @@ const KnowledgeBase = () => {
 
     } catch (error: any) {
       console.error("Upload error:", error);
+
+      let errorMsg = error.message || "Failed to process the CSV file.";
+
+      // Add formatting hint if it's a CSV tokenizing error
+      if (errorMsg.includes("Error tokenizing data") || errorMsg.includes("Expected 34 fields")) {
+        errorMsg = `${errorMsg}\n\nTip: You probably have a comma inside a text field (like the Tags column). Make sure to wrap it in double quotes: "clothing, premium, sale"`;
+      }
+
       toast({
         title: "Sync Failed",
-        description: error.message || "Failed to process the CSV file.",
-        variant: "destructive"
+        description: errorMsg,
+        variant: "destructive",
+        duration: 8000 // Give them more time to read the tip
       });
       setFile(null); // Reset UI
     } finally {
@@ -199,6 +218,14 @@ const KnowledgeBase = () => {
     );
   }, [products, searchQuery]);
 
+  const downloadSampleCSV = () => {
+    window.open("http://localhost:8000/download-sample-csv", "_blank");
+  };
+
+  const downloadEmptyTemplate = () => {
+    window.open("http://localhost:8000/download-csv-template", "_blank");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -208,17 +235,53 @@ const KnowledgeBase = () => {
             Upload your product catalog to train the AI
           </p>
         </div>
-        {products.length > 0 && (
+        <div className="flex gap-2">
           <Button
-            variant="destructive"
-            onClick={clearCatalog}
-            disabled={clearCatalogMutation.isPending || syncing}
+            variant="outline"
+            onClick={downloadEmptyTemplate}
             className="flex items-center gap-2"
           >
-            {clearCatalogMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            Clear Catalog
+            <Download className="h-4 w-4" />
+            Download CSV Template
           </Button>
-        )}
+          <Button
+            variant="outline"
+            onClick={downloadSampleCSV}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Download Sample Data
+          </Button>
+          {products.length > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  disabled={clearCatalogMutation.isPending || syncing}
+                  className="flex items-center gap-2"
+                >
+                  {clearCatalogMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Clear Catalog
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete all {products.length} products
+                    from your catalog and remove their data from the AI Knowledge Engine.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => clearCatalogMutation.mutate()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Yes, clear catalog
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </div>
 
       {/* Upload Zone */}

@@ -1,11 +1,8 @@
-import os
 import pandas as pd
-from typing import List
 from database import SessionLocal
 from models import Product, Merchant
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
-from sqlalchemy.orm import Session
 
 # Allowable columns per specification
 ALLOWED_COLUMNS = [

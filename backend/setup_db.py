@@ -1,5 +1,3 @@
-import os
-from sqlalchemy import create_engine
 from database import Base, engine, MYSQL_URI
 from models import *
 

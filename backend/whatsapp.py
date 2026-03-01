@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 import requests
-import json
 import traceback
-from typing import Dict, Any
+
 
 from database import SessionLocal
 import models
@@ -82,7 +81,7 @@ async def process_whatsapp_message_async(sender_phone: str, message_text: str, p
             text=ai_reply
         )
         
-    except Exception as e:
+    except Exception:
         print("Fatal error processing WhatsApp webhook in background:")
         traceback.print_exc()
     finally:
